@@ -94,7 +94,7 @@ def check_callback(call):
     # التعامل مع أزرار منصات التحميل
     if call.data in ["yt", "ig", "fb", "tt"]:
         user_platform[chat_id] = call.data
-        admin_state[chat_id] = None # إلغاء حالة الأدمن عند اختيار منصة
+        admin_state[chat_id] = None 
         platforms_names = {"yt": "🛑 يوتيوب", "ig": "📸 انستغرام", "fb": "📘 فيسبوك", "tt": "🖤 تيك توك"}
         name = platforms_names[call.data]
         bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, 
@@ -153,14 +153,18 @@ def download_video(message):
             try: bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, text="⚡ تم اكتمال التحميل، جاري إرسال الفيديو...")
             except Exception: pass
 
+    # الإعدادات المحدثة لتخطي حظر يوتيوب وانستغرام الشديد
     ydl_opts = {
-        'format': 'best',
+        'format': 'best[ext=mp4]/best', # إجبار يوتيوب على صيغة mp4 متوافقة مع تليجرام
         'outtmpl': f'vid_{chat_id}.%(ext)s',
         'progress_hooks': [progress_hook],
         'quiet': True,
-        # إضافة عميل متصفح وهمي لتجاوز حظر انستغرام ويوتيوب
+        # 🌟 أهم سطرين لتجاوز حظر يوتيوب على السيرفرات السحابية:
+        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
         }
     }
 
@@ -169,6 +173,7 @@ def download_video(message):
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
             
+            # التأكد من الصيغة وتعديلها لتفتح مباشرة في تليجرام
             if os.path.exists(filename):
                 with open(filename, 'rb') as vf:
                     bot.send_video(chat_id, vf, caption="✅ تم تحميل الفيديو بنجاح بواسطة بوت أحمد!")
