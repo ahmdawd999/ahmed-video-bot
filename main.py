@@ -2,9 +2,25 @@ import os
 import telebot
 from telebot import types
 import yt_dlp
+from flask import Flask
+from threading import Thread
 
-# توكن البوت الخاص بك
-TOKEN = "8813772165:AAH4gHYpzZFFJIqPmRUz2diXFvCfhAElPSg"
+# خادم ويب صغير لإبقاء البوت مستيقظاً على السيرفر المجاني
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "البوت يعمل بنجاح 24/7!"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+# استدعاء التوكن بشكل آمن من إعدادات السيرفر
+TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
 # تخزين المنصة المختارة لكل مستخدم
@@ -49,10 +65,8 @@ def download_video(message):
         bot.send_message(chat_id, "⚠️ عذراً، يرجى إرسال رابط صحيح يبدأ بـ http أو https.")
         return
 
-    # رسالة العداد المبدئية
     status = bot.send_message(chat_id, "⏳ جاري بدء التحميل والمعالجة... [0%]")
     
-    # دالة تحديث العداد
     def progress_hook(d):
         if d['status'] == 'downloading':
             total = d.get('total_bytes') or d.get('total_bytes_estimate')
@@ -67,7 +81,6 @@ def download_video(message):
             try: bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, text="⚡ تم اكتمال التحميل، جاري إرسال الفيديو...")
             except Exception: pass
 
-    # إعدادات التحميل بالسيرفر لضمان السرعة والجودة المتوافقة مع تلغرام
     ydl_opts = {
         'format': 'best',
         'outtmpl': f'vid_{chat_id}.%(ext)s',
@@ -83,7 +96,7 @@ def download_video(message):
             if os.path.exists(filename):
                 with open(filename, 'rb') as vf:
                     bot.send_video(chat_id, vf, caption="✅ تم تحميل الفيديو بنجاح بواسطة بوت أحمد!")
-                os.remove(filename) # تنظيف السيرفر أولاً بأول لكي لا يتوقف البوت
+                os.remove(filename) 
             else:
                 bot.send_message(chat_id, "❌ حدث خطأ، لم نتمكن من معالجة الفيديو.")
     except Exception as e:
@@ -94,6 +107,8 @@ def download_video(message):
         except Exception: pass
         user_platform[chat_id] = None
 
-# تشغيل مستمر
-print("البوت يعمل...")
-bot.infinity_polling()
+# تشغيل البوت والويب سيرفر معاً
+if __name__ == '__main__':
+    keep_alive()
+    print("البوت يعمل والويب سيرفر نشط...")
+    bot.infinity_polling()
