@@ -26,8 +26,9 @@ bot = telebot.TeleBot(TOKEN)
 # 🛠️ معرف حساب المطور أحمد لفتح لوحة التحكم
 ADMIN_ID = 8460989245  
 
-# اسم ملف حفظ المستخدمين
+# اسم ملف حفظ المستخدمين وملف الكوكيز
 USERS_FILE = "users.txt"
+COOKIES_FILE = "cookies.txt"
 
 # دالة لحفظ المستخدم الجديد
 def save_user(chat_id):
@@ -53,7 +54,6 @@ def start_command(message):
     user_platform[chat_id] = None
     admin_state[chat_id] = None
     
-    # حفظ المستخدم في القائمة
     save_user(chat_id)
     
     welcome_msg = "مرحبا بك في بوت احمد كيف يمكننا مساعده 🤝✨\n\n👇 يرجى اختيار المنصة المراد التحميل منها:"
@@ -67,7 +67,7 @@ def start_command(message):
     )
     bot.send_message(chat_id, welcome_msg, reply_markup=markup)
 
-# ⚙️ أمر لوحة التحكم للمطور لإرسال رسائل جماعية
+# أمر لوحة التحكم للمطور
 @bot.message_handler(commands=['admin'])
 def admin_command(message):
     chat_id = message.chat.id
@@ -83,7 +83,6 @@ def admin_command(message):
 def check_callback(call):
     chat_id = call.message.chat.id
     
-    # التعامل مع أزرار لوحة التحكم
     if call.data == "broadcast":
         if chat_id != ADMIN_ID: return
         admin_state[chat_id] = "waiting_broadcast"
@@ -91,7 +90,6 @@ def check_callback(call):
                               text="📝 من فضلك أرسل نص الرسالة التي تريد إذاعتها لجميع المستخدمين الآن:")
         return
 
-    # التعامل مع أزرار منصات التحميل
     if call.data in ["yt", "ig", "fb", "tt"]:
         user_platform[chat_id] = call.data
         admin_state[chat_id] = None 
@@ -153,22 +151,20 @@ def download_video(message):
             try: bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, text="⚡ تم اكتمال التحميل، جاري إرسال الفيديو...")
             except Exception: pass
 
-    # 🌟 إعدادات ذكية جداً ومدمجة لتخطي حظر يوتيوب الحديث على السيرفرات السحابية
+    # إعدادات متطورة جداً لكسر حظر يوتيوب وانستغرام عبر ملف الكوكيز المرفوع
     ydl_opts = {
         'format': 'best[ext=mp4]/best', 
         'outtmpl': f'vid_{chat_id}.%(ext)s',
         'progress_hooks': [progress_hook],
         'quiet': True,
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['ios', 'android'], # استخدام محاكاة الهواتف الذكية لأنها الأقل حظراً
-                'skip': ['webpage']
-            }
-        },
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
         }
     }
+
+    # دمج ملف الكوكيز المرفوع تلقائياً في عملية التحميل لتجاوز البوتات
+    if os.path.exists(COOKIES_FILE):
+        ydl_opts['cookiefile'] = COOKIES_FILE
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -189,7 +185,6 @@ def download_video(message):
         except Exception: pass
         user_platform[chat_id] = None
 
-# تشغيل البوت والويب سيرفر معاً
 if __name__ == '__main__':
     keep_alive()
     print("البوت يعمل والويب سيرفر نشط...")
