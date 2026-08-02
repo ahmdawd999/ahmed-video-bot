@@ -153,18 +153,20 @@ def download_video(message):
             try: bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, text="⚡ تم اكتمال التحميل، جاري إرسال الفيديو...")
             except Exception: pass
 
-    # الإعدادات المحدثة لتخطي حظر يوتيوب وانستغرام الشديد
+    # 🌟 إعدادات ذكية جداً ومدمجة لتخطي حظر يوتيوب الحديث على السيرفرات السحابية
     ydl_opts = {
-        'format': 'best[ext=mp4]/best', # إجبار يوتيوب على صيغة mp4 متوافقة مع تليجرام
+        'format': 'best[ext=mp4]/best', 
         'outtmpl': f'vid_{chat_id}.%(ext)s',
         'progress_hooks': [progress_hook],
         'quiet': True,
-        # 🌟 أهم سطرين لتجاوز حظر يوتيوب على السيرفرات السحابية:
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['ios', 'android'], # استخدام محاكاة الهواتف الذكية لأنها الأقل حظراً
+                'skip': ['webpage']
+            }
+        },
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1'
         }
     }
 
@@ -173,7 +175,6 @@ def download_video(message):
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
             
-            # التأكد من الصيغة وتعديلها لتفتح مباشرة في تليجرام
             if os.path.exists(filename):
                 with open(filename, 'rb') as vf:
                     bot.send_video(chat_id, vf, caption="✅ تم تحميل الفيديو بنجاح بواسطة بوت أحمد!")
