@@ -4,8 +4,9 @@ from telebot import types
 import yt_dlp
 from flask import Flask
 from threading import Thread
+import re
 
-# خادم ويب صغير لإبقاء البوت مستيقظاً على السيرفر المجاني
+# خادم ويب صغير لإبقاء البوت مستيقظاً
 app = Flask('')
 
 @app.route('/')
@@ -19,31 +20,26 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# استدعاء التوكن بشكل آمن من إعدادات السيرفر
+# استدعاء التوكن
 TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
-# 🛠️ معرف حساب المطور أحمد لفتح لوحة التحكم
-ADMIN_ID = 8460989245  
-
-# اسم ملف حفظ المستخدمين وملف الكوكيز
+ADMIN_ID = 8460989245
 USERS_FILE = "users.txt"
 COOKIES_FILE = "cookies.txt"
 
-# دالة لحفظ المستخدم الجديد
+# حفظ المستخدمين
 def save_user(chat_id):
     if not os.path.exists(USERS_FILE):
         with open(USERS_FILE, "w") as f:
             f.write("")
-            
     with open(USERS_FILE, "r") as f:
         users = f.read().splitlines()
-        
     if str(chat_id) not in users:
         with open(USERS_FILE, "a") as f:
             f.write(f"{chat_id}\n")
 
-# تخزين المنصة المختارة لكل مستخدم
+# تخزين المنصة المختارة
 user_platform = {}
 admin_state = {}
 
@@ -53,11 +49,9 @@ def start_command(message):
     chat_id = message.chat.id
     user_platform[chat_id] = None
     admin_state[chat_id] = None
-    
     save_user(chat_id)
     
     welcome_msg = "مرحبا بك في بوت احمد كيف يمكننا مساعده 🤝✨\n\n👇 يرجى اختيار المنصة المراد التحميل منها:"
-    
     markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(
         types.InlineKeyboardButton("🛑 يوتيوب", callback_data="yt"),
@@ -67,15 +61,14 @@ def start_command(message):
     )
     bot.send_message(chat_id, welcome_msg, reply_markup=markup)
 
-# أمر لوحة التحكم للمطور
+# لوحة تحكم المطور
 @bot.message_handler(commands=['admin'])
 def admin_command(message):
     chat_id = message.chat.id
     if chat_id != ADMIN_ID:
         return
-        
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("📣 إرسال رسالة جماعية (إذاعة)", callback_data="broadcast"))
+    markup.add(types.InlineKeyboardButton("📣 إرسال رسالة جماعية", callback_data="broadcast"))
     bot.send_message(chat_id, "مرحباً بك في لوحة تحكم المطور أحمد 🛠️", reply_markup=markup)
 
 # استقبال الضغط على الأزرار
@@ -87,7 +80,7 @@ def check_callback(call):
         if chat_id != ADMIN_ID: return
         admin_state[chat_id] = "waiting_broadcast"
         bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, 
-                              text="📝 من فضلك أرسل نص الرسالة التي تريد إذاعتها لجميع المستخدمين الآن:")
+                              text="📝 من فضلك أرسل نص الرسالة التي تريد إذاعتها لجميع المستخدمين:")
         return
 
     if call.data in ["yt", "ig", "fb", "tt"]:
@@ -96,9 +89,9 @@ def check_callback(call):
         platforms_names = {"yt": "🛑 يوتيوب", "ig": "📸 انستغرام", "fb": "📘 فيسبوك", "tt": "🖤 تيك توك"}
         name = platforms_names[call.data]
         bot.edit_message_text(chat_id=chat_id, message_id=call.message.message_id, 
-                              text=f"لقد اخترت {name} 📥\n\n📍 من فضلك ارسل رابط المقطع الآن لكي نقوم بتحميله بجودة عالية:")
+                              text=f"لقد اخترت {name} 📥\n\n📍 من فضلك ارسل رابط المقطع الآن:")
 
-# استقبال نص الإذاعة من الأدمن حصراً
+# استقبال الإذاعة
 @bot.message_handler(func=lambda msg: msg.chat.id == ADMIN_ID and admin_state.get(msg.chat.id) == "waiting_broadcast")
 def handle_admin_broadcast(message):
     chat_id = message.chat.id
@@ -106,86 +99,170 @@ def handle_admin_broadcast(message):
     broadcast_text = message.text
     
     if not os.path.exists(USERS_FILE):
-        bot.send_message(chat_id, "❌ لا يوجد مستخدمين مسجلين بعد في البوت.")
+        bot.send_message(chat_id, "❌ لا يوجد مستخدمين مسجلين.")
         return
         
     with open(USERS_FILE, "r") as f:
         users = f.read().splitlines()
         
-    bot.send_message(chat_id, f"⏳ جاري بدء الإرسال إلى {len(users)} مستخدم...")
+    bot.send_message(chat_id, f"⏳ جاري الإرسال إلى {len(users)} مستخدم...")
     
     success = 0
-    failed = 0
     for user in users:
         try:
             bot.send_message(int(user), broadcast_text)
             success += 1
-        except Exception:
-            failed += 1 
+        except:
+            pass
             
-    bot.send_message(chat_id, f"✅ تم انتهاء الإذاعة بنجاح!\n\n🟢 تم الإرسال إلى: {success}\n🔴 فشل الإرسال إلى: {failed} (قاموا بحظر البوت)")
+    bot.send_message(chat_id, f"✅ تم الإرسال بنجاح إلى {success} مستخدم")
 
-# استقبال روابط التحميل من المستخدمين بناءً على المنصة المختارة
+# استقبال روابط التحميل
 @bot.message_handler(func=lambda msg: user_platform.get(msg.chat.id) is not None)
 def download_video(message):
     chat_id = message.chat.id
     url = message.text.strip()
+    platform = user_platform[chat_id]
     
     if not url.startswith("http"):
-        bot.send_message(chat_id, "⚠️ عذراً، يرجى إرسال رابط صحيح يبدأ بـ http أو https.")
+        bot.send_message(chat_id, "⚠️ يرجى إرسال رابط صحيح يبدأ بـ http أو https.")
         return
 
-    status = bot.send_message(chat_id, "⏳ جاري بدء التحميل والمعالجة... [0%]")
+    # معالجة روابط انستغرام (إزالة المعاملات الإضافية)
+    if platform == "ig" and "instagram.com" in url:
+        url = re.sub(r'\?.*$', '', url)
+        if not url.endswith('/'):
+            url += '/'
+    
+    status = bot.send_message(chat_id, "⏳ جاري التحميل... [0%]")
     
     def progress_hook(d):
         if d['status'] == 'downloading':
             total = d.get('total_bytes') or d.get('total_bytes_estimate')
             downloaded = d.get('downloaded_bytes', 0)
-            if total:
+            if total and total > 0:
                 percent = int((downloaded / total) * 100)
-                try:
-                    if percent % 20 == 0:
-                        bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, text=f"⏳ جاري تحميل ومعالجة المقطع... [{percent}%]")
-                except Exception: pass
+                if percent % 25 == 0:
+                    try:
+                        bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, 
+                                            text=f"⏳ جاري التحميل... [{percent}%]")
+                    except:
+                        pass
         elif d['status'] == 'finished':
-            try: bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, text="⚡ تم اكتمال التحميل، جاري إرسال الفيديو...")
-            except Exception: pass
+            try:
+                bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, 
+                                    text="⚡ اكتمل التحميل، جاري المعالجة...")
+            except:
+                pass
 
-    # إعدادات متطورة جداً لكسر حظر يوتيوب وانستغرام عبر ملف الكوكيز المرفوع
+    # إعدادات yt-dlp المحسنة
     ydl_opts = {
-        'format': 'best[ext=mp4]/best', 
-        'outtmpl': f'vid_{chat_id}.%(ext)s',
+        'outtmpl': f'downloads/%(id)s.%(ext)s',
         'progress_hooks': [progress_hook],
         'quiet': True,
+        'no_warnings': True,
+        'extract_flat': False,
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-us,en;q=0.5',
+            'Sec-Fetch-Mode': 'navigate',
         }
     }
 
-    # دمج ملف الكوكيز المرفوع تلقائياً في عملية التحميل لتجاوز البوتات
+    # إعدادات خاصة بيوتيوب
+    if platform == "yt":
+        ydl_opts.update({
+            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'merge_output_format': 'mp4',
+        })
+    # إعدادات خاصة بإنستغرام
+    elif platform == "ig":
+        ydl_opts.update({
+            'format': 'best[ext=mp4]',
+            'cookiefile': COOKIES_FILE if os.path.exists(COOKIES_FILE) else None,
+            'extractor_args': {'instagram': {'embed': ['metadata']}},
+        })
+    # إعدادات فيسبوك وتيك توك
+    elif platform in ["fb", "tt"]:
+        ydl_opts.update({
+            'format': 'best[ext=mp4]/best',
+        })
+
+    # إضافة ملف الكوكيز إذا كان موجوداً
     if os.path.exists(COOKIES_FILE):
         ydl_opts['cookiefile'] = COOKIES_FILE
+
+    # إنشاء مجلد التحميلات إذا لم يكن موجوداً
+    if not os.path.exists('downloads'):
+        os.makedirs('downloads')
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
             
-            if os.path.exists(filename):
-                with open(filename, 'rb') as vf:
-                    bot.send_video(chat_id, vf, caption="✅ تم تحميل الفيديو بنجاح بواسطة بوت أحمد!")
-                os.remove(filename) 
+            # البحث عن الملف المحمل
+            video_id = info.get('id', 'video')
+            filename = None
+            
+            # محاولة إيجاد الملف
+            for f in os.listdir('downloads'):
+                if f.startswith(video_id) and f.endswith(('.mp4', '.mkv', '.webm')):
+                    filename = os.path.join('downloads', f)
+                    break
+            
+            if filename and os.path.exists(filename):
+                file_size = os.path.getsize(filename)
+                
+                # تيليجرام يسمح بحد أقصى 50MB للفيديو
+                if file_size > 50 * 1024 * 1024:
+                    bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, 
+                                        text="⚠️ حجم الفيديو كبير جداً (أكبر من 50MB)")
+                    os.remove(filename)
+                else:
+                    try:
+                        bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, 
+                                            text="📤 جاري رفع الفيديو...")
+                    except:
+                        pass
+                    
+                    with open(filename, 'rb') as vf:
+                        bot.send_video(chat_id, vf, 
+                                     caption="✅ تم التحميل بنجاح بواسطة بوت أحمد!",
+                                     supports_streaming=True)
+                    os.remove(filename)
             else:
-                bot.send_message(chat_id, "❌ حدث خطأ، لم نتمكن من معالجة الفيديو.")
+                bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, 
+                                    text="❌ فشلت معالجة الفيديو - لم يتم العثور على الملف")
+                
     except Exception as e:
-        print(f"Error: {e}")
-        bot.send_message(chat_id, "❌ عذراً، فشل تحميل الفيديو. تأكد من أن الرابط صحيح وحسابك عام وليس خاصاً.")
+        error_msg = str(e)
+        print(f"Error: {error_msg}")
+        
+        # رسائل خطأ مخصصة حسب المشكلة
+        if "Private video" in error_msg or "private" in error_msg.lower():
+            bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, 
+                                text="❌ هذا الفيديو خاص ولا يمكن تحميله")
+        elif "Video unavailable" in error_msg:
+            bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, 
+                                text="❌ الفيديو غير متاح أو تم حذفه")
+        elif "HTTP Error 429" in error_msg:
+            bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, 
+                                text="❌ تم حظر الطلب مؤقتاً، حاول مرة أخرى لاحقاً")
+        else:
+            bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, 
+                                text="❌ فشل التحميل. تأكد من:\n- صحة الرابط\n- أن الحساب عام (للانستغرام)\n- حجم الفيديو أقل من 50MB")
+    
     finally:
-        try: bot.delete_message(chat_id, status.message_id)
-        except Exception: pass
         user_platform[chat_id] = None
+        # تنظيف الملفات المتبقية
+        try:
+            for f in os.listdir('downloads'):
+                os.remove(os.path.join('downloads', f))
+        except:
+            pass
 
 if __name__ == '__main__':
     keep_alive()
-    print("البوت يعمل والويب سيرفر نشط...")
+    print("البوت يعمل...")
     bot.infinity_polling()
