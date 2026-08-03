@@ -5,6 +5,7 @@ import yt_dlp
 from flask import Flask
 from threading import Thread
 import re
+import random
 
 # خادم ويب صغير لإبقاء البوت مستيقظاً
 app = Flask('')
@@ -22,11 +23,26 @@ def keep_alive():
 
 # استدعاء التوكن
 TOKEN = os.environ.get("BOT_TOKEN")
+if not TOKEN:
+    print("خطأ: لم يتم العثور على BOT_TOKEN")
+    exit()
+
 bot = telebot.TeleBot(TOKEN)
 
 ADMIN_ID = 8460989245
 USERS_FILE = "users.txt"
 COOKIES_FILE = "cookies.txt"
+
+# قائمة User-Agents متنوعة لتجنب الحظر
+USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+]
+
+def get_random_ua():
+    return random.choice(USER_AGENTS)
 
 # حفظ المستخدمين
 def save_user(chat_id):
@@ -128,7 +144,7 @@ def download_video(message):
         bot.send_message(chat_id, "⚠️ يرجى إرسال رابط صحيح يبدأ بـ http أو https.")
         return
 
-    # معالجة روابط انستغرام (إزالة المعاملات الإضافية)
+    # معالجة روابط انستغرام
     if platform == "ig" and "instagram.com" in url:
         url = re.sub(r'\?.*$', '', url)
         if not url.endswith('/'):
@@ -155,7 +171,7 @@ def download_video(message):
             except:
                 pass
 
-    # إعدادات yt-dlp المحسنة
+    # الإعدادات الأساسية
     ydl_opts = {
         'outtmpl': f'downloads/%(id)s.%(ext)s',
         'progress_hooks': [progress_hook],
@@ -163,37 +179,42 @@ def download_video(message):
         'no_warnings': True,
         'extract_flat': False,
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+            'User-Agent': get_random_ua(),
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-us,en;q=0.5',
+            'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
             'Sec-Fetch-Mode': 'navigate',
-        }
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Upgrade-Insecure-Requests': '1',
+        },
+        'socket_timeout': 30,
+        'retries': 5,
+        'fragment_retries': 5,
+        'extractor_retries': 5,
     }
 
-    # إعدادات خاصة بيوتيوب
+    # إعدادات المنصات
     if platform == "yt":
         ydl_opts.update({
-            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'format': 'bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4][height<=1080]/best[height<=1080]',
             'merge_output_format': 'mp4',
         })
-    # إعدادات خاصة بإنستغرام
     elif platform == "ig":
         ydl_opts.update({
-            'format': 'best[ext=mp4]',
-            'cookiefile': COOKIES_FILE if os.path.exists(COOKIES_FILE) else None,
+            'format': 'best[ext=mp4]/best',
             'extractor_args': {'instagram': {'embed': ['metadata']}},
         })
-    # إعدادات فيسبوك وتيك توك
     elif platform in ["fb", "tt"]:
         ydl_opts.update({
             'format': 'best[ext=mp4]/best',
         })
 
-    # إضافة ملف الكوكيز إذا كان موجوداً
-    if os.path.exists(COOKIES_FILE):
+    # إضافة الكوكيز إذا موجودة
+    if os.path.exists(COOKIES_FILE) and os.path.getsize(COOKIES_FILE) > 0:
         ydl_opts['cookiefile'] = COOKIES_FILE
 
-    # إنشاء مجلد التحميلات إذا لم يكن موجوداً
+    # إنشاء مجلد التحميلات
     if not os.path.exists('downloads'):
         os.makedirs('downloads')
 
@@ -201,11 +222,10 @@ def download_video(message):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             
-            # البحث عن الملف المحمل
             video_id = info.get('id', 'video')
             filename = None
             
-            # محاولة إيجاد الملف
+            # البحث عن الملف المحمل
             for f in os.listdir('downloads'):
                 if f.startswith(video_id) and f.endswith(('.mp4', '.mkv', '.webm')):
                     filename = os.path.join('downloads', f)
@@ -214,10 +234,8 @@ def download_video(message):
             if filename and os.path.exists(filename):
                 file_size = os.path.getsize(filename)
                 
-                # تيليجرام يسمح بحد أقصى 50MB للفيديو
                 if file_size > 50 * 1024 * 1024:
-                    bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, 
-                                        text="⚠️ حجم الفيديو كبير جداً (أكبر من 50MB)")
+                    bot.send_message(chat_id, "⚠️ حجم الفيديو كبير جداً (أكبر من 50MB)")
                     os.remove(filename)
                 else:
                     try:
@@ -229,40 +247,42 @@ def download_video(message):
                     with open(filename, 'rb') as vf:
                         bot.send_video(chat_id, vf, 
                                      caption="✅ تم التحميل بنجاح بواسطة بوت أحمد!",
-                                     supports_streaming=True)
+                                     supports_streaming=True,
+                                     timeout=60)
                     os.remove(filename)
             else:
-                bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, 
-                                    text="❌ فشلت معالجة الفيديو - لم يتم العثور على الملف")
+                bot.send_message(chat_id, "❌ فشلت معالجة الفيديو - لم يتم العثور على الملف")
                 
     except Exception as e:
         error_msg = str(e)
         print(f"Error: {error_msg}")
         
-        # رسائل خطأ مخصصة حسب المشكلة
         if "Private video" in error_msg or "private" in error_msg.lower():
-            bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, 
-                                text="❌ هذا الفيديو خاص ولا يمكن تحميله")
+            bot.send_message(chat_id, "❌ هذا الفيديو خاص ولا يمكن تحميله")
         elif "Video unavailable" in error_msg:
-            bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, 
-                                text="❌ الفيديو غير متاح أو تم حذفه")
-        elif "HTTP Error 429" in error_msg:
-            bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, 
-                                text="❌ تم حظر الطلب مؤقتاً، حاول مرة أخرى لاحقاً")
+            bot.send_message(chat_id, "❌ الفيديو غير متاح أو تم حذفه")
+        elif "429" in error_msg or "Too Many Requests" in error_msg:
+            bot.send_message(chat_id, "❌ تم حظر الطلب مؤقتاً، جرب:\n- إرسال رابط آخر\n- الانتظار 5 دقائق والمحاولة مرة أخرى")
+        elif "Sign in" in error_msg or "login" in error_msg.lower():
+            bot.send_message(chat_id, "❌ هذا المحتوى يتطلب تسجيل دخول. تأكد من إضافة ملف cookies.txt")
         else:
-            bot.edit_message_text(chat_id=chat_id, message_id=status.message_id, 
-                                text="❌ فشل التحميل. تأكد من:\n- صحة الرابط\n- أن الحساب عام (للانستغرام)\n- حجم الفيديو أقل من 50MB")
+            bot.send_message(chat_id, "❌ فشل التحميل. تأكد من:\n- صحة الرابط\n- أن الحساب عام (للانستغرام)\n- حجم الفيديو أقل من 50MB")
     
     finally:
         user_platform[chat_id] = None
-        # تنظيف الملفات المتبقية
         try:
-            for f in os.listdir('downloads'):
-                os.remove(os.path.join('downloads', f))
+            bot.delete_message(chat_id, status.message_id)
+        except:
+            pass
+        # تنظيف الملفات
+        try:
+            if os.path.exists('downloads'):
+                for f in os.listdir('downloads'):
+                    os.remove(os.path.join('downloads', f))
         except:
             pass
 
 if __name__ == '__main__':
     keep_alive()
-    print("البوت يعمل...")
+    print("البوت يعمل والويب سيرفر نشط...")
     bot.infinity_polling()
